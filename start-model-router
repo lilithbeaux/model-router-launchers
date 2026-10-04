@@ -1,0 +1,41 @@
+#!/bin/bash
+# start-model-router — MAIN local model router (llama.cpp router mode)
+# Endpoint : http://127.0.0.1:8091/v1   (OpenAI-compatible, hot-swap)
+# Preset   : ${MODEL_ROUTER_DIR:-$HOME/router-models}/models-preset.ini
+# Lineup   : ling-3.0-tiny (PRIMARY, -cmoe), lfm2.5-2.6b-sft, lfm2.5-8b-toolbench,
+#            lfm2-12b-speeddemon, gemma4-12b (VL), ui-venus-2-9b (VL), lfm2.5-1.2b-nova
+# TRAP: /v1/models answers instantly even before models are usable —
+#       verify with a real /chat/completions.
+#
+# This is the ONLY local server for the big lane. Micro lane: start-model-router-micro.
+
+MODELS_DIR="${MODEL_ROUTER_DIR:-$HOME/router-models}"
+BIN="$HOME/llama.cpp/build/bin/llama"
+PORT=8091
+MAX=2   # 8GB iGPU: one big + one small resident; hot-swap handles the rest
+
+case "${1:-start}" in
+  stop)
+    pkill -f "llama serve.*models-preset.ini" && echo "main router stopped" || echo "not running"
+    ;;
+  status)
+    curl -sm3 "http://127.0.0.1:${PORT}/v1/models" ; echo
+    ;;
+  logs)
+    tail -40 /tmp/model-router.log
+    ;;
+  *)
+    if ss -tln | grep -q ":${PORT} "; then
+      echo "main router already live on :${PORT}"
+      exit 0
+    fi
+    exec "$BIN" serve \
+      --models-dir "$MODELS_DIR" \
+      --models-preset "$MODELS_DIR/models-preset.ini" \
+      --models-max "$MAX" \
+      --host 127.0.0.1 \
+      --port "$PORT" \
+      --alias ling \
+      -t 4 -tb 6
+    ;;
+esac

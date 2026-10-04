@@ -1,0 +1,33 @@
+#!/bin/bash
+# start-model-router-micro — MICRO fast-lane router (tiny models, co-resides with :8091)
+# Endpoint : http://127.0.0.1:8092/v1
+# Preset   : ${MODEL_ROUTER_DIR:-$HOME/router-models}/models-micro.ini
+# Lineup   : lfm2.5-vl-1.6b (VL), lfm2.5-1.2b-thinking
+# These are small enough (~2G combined) to run ALONGSIDE the main router.
+
+MODELS_DIR="${MODEL_ROUTER_DIR:-$HOME/router-models}"
+BIN="$HOME/llama.cpp/build/bin/llama"
+PORT=8092
+MAX=2   # both micro models fit simultaneously
+
+case "${1:-start}" in
+  stop)
+    pkill -f "llama serve.*models-micro.ini" && echo "micro router stopped" || echo "not running"
+    ;;
+  status)
+    curl -sm3 "http://127.0.0.1:${PORT}/v1/models" ; echo
+    ;;
+  *)
+    if ss -tln | grep -q ":${PORT} "; then
+      echo "micro router already live on :${PORT}"
+      exit 0
+    fi
+    exec "$BIN" serve \
+      --models-dir "$MODELS_DIR" \
+      --models-preset "$MODELS_DIR/models-micro.ini" \
+      --models-max "$MAX" \
+      --host 127.0.0.1 \
+      --port "$PORT" \
+      -t 4 -tb 6
+    ;;
+esac
